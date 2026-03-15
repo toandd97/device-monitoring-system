@@ -77,10 +77,11 @@ services:
     env_file:
       - .env
     environment:
-      # Hard override to prevent this container from being a worker/simulator
       CONSUMER_ENABLED: "false"
       SCHEDULER_ENABLED: "false"
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - .:/app
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
 
   worker_service:
     container_name: worker_service
@@ -99,29 +100,31 @@ services:
     env_file:
       - .env
     environment:
-      # Hard override to ensure it only acts as worker
       CONSUMER_ENABLED: "true"
       SCHEDULER_ENABLED: "false"
+    volumes:
+      - .:/app
     command: python src/worker.py
 
-  simulator_service:
-    container_name: simulator_service
-    build:
-      context: .
-      dockerfile: Dockerfile
-    networks:
-      - kafka-net
-    depends_on:
-      api_service:
-        condition: service_started
-    env_file:
-      - .env
-    environment:
-      API_BASE_URL: "http://api_service:8000"
-      # Hard override to ensure simulator acts as sender
-      SCHEDULER_ENABLED: "true"
-      CONSUMER_ENABLED: "false"
-    command: python src/simulator.py
+  # simulator_service:
+  #   container_name: simulator_service
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   networks:
+  #     - kafka-net
+  #   depends_on:
+  #     api_service:
+  #       condition: service_started
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     API_BASE_URL: "http://api_service:8000"
+  #     SCHEDULER_ENABLED: "true"
+  #     CONSUMER_ENABLED: "false"
+  #   volumes:
+  #     - .:/app
+  #   command: python src/simulator.py
 
   redis:
     image: redis:latest

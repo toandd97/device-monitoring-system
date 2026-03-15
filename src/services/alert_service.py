@@ -23,7 +23,7 @@ class AlertService:
         try:
             self._api.send_message(
                 chat_id=self.chat_id,
-                text=f"🚨 *DEVICE ALERT*\n\n{message}"
+                text=f"🚨 <b>DEVICE ALERT</b>\n\n{message}"
             )
             logger.info("Alert sent successfully to Telegram via API Layer")
             return True

@@ -1,29 +1,39 @@
-from typing import Literal
-
+import copy
 from src.common.utils import generate_uuid, utc_now_iso
 from src.database.base_model import BaseModel
 
 
-MetricStatus = Literal["NORMAL", "WARNING", "CRITICAL"]
+class MetricFields:
+    EVENT_ID = "event_id"
+    EVENT_TYPE = "event_type"
+    TIMESTAMP = "timestamp"
+    SOURCE = "source"
+    PAYLOAD = "payload"
+
+
+class MetricStatus:
+    NORMAL = "NORMAL"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
 
 
 class MetricDocument(BaseModel):
     collection_name = "metrics"
 
     @staticmethod
-    def build_document(
-        device_id: str,
-        metric: str,
-        value: float,
-        status: MetricStatus,
-        timestamp: str,
-    ) -> dict:
-        return {
-            "_id": generate_uuid(),
-            "device_id": device_id,
-            "metric": metric,
-            "value": value,
-            "status": status,
-            "timestamp": timestamp or utc_now_iso(),
-        }
+    def build_document(event: dict, status: str) -> dict:
+        if event is None:
+            event = {}
+            
+        doc = copy.deepcopy(event)
+        doc["_id"] = doc.get(MetricFields.EVENT_ID) or generate_uuid()
+        
+        payload = doc.get(MetricFields.PAYLOAD) or {}
+        payload["status"] = status
+        doc[MetricFields.PAYLOAD] = payload
+        
+        if not doc.get(MetricFields.TIMESTAMP):
+            doc[MetricFields.TIMESTAMP] = utc_now_iso()
+            
+        return doc
 

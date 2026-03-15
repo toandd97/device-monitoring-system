@@ -2,40 +2,28 @@ from fastapi import APIRouter, Depends
 
 from src.controllers.metric_controller import MetricController
 from src.services.metric_service import MetricService
-from src.validators.metric_validator import MetricRequest
+from src.validators.metric_validator import MetricRequest, validate_create_metric
 
 
 router = APIRouter(tags=["Metrics V1"])
 
 
-# ── Dependency Injection ──────────────────────────────────────────────────────
-
-def get_service():
-    start_time = time.time() # 1. Ghi lại giờ bắt đầu
-    service = Service()
-    try:
-        yield service
-    finally:
-        process_time = time.time() - start_time # 2. Tính thời gian đã trôi qua
-        print(f"Request handled in {process_time} seconds") # 3. Log lại
+def get_metric_service() -> MetricService:
+    return MetricService()
 
 
 def get_metric_controller(
     service: MetricService = Depends(get_metric_service),
 ) -> MetricController:
-    """Khởi tạo MetricController với service được inject."""
     return MetricController(metric_service=service)
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-# Mỗi route chỉ có 1 nhiệm vụ: nhận HTTP request → chuyển cho controller xử lý.
-# Không chứa bất kỳ business logic nào ở đây.
-
 @router.post("", summary="Ghi nhận metric từ thiết bị")
-async def create_metric(
+def create_metric(
     request: MetricRequest,
     controller: MetricController = Depends(get_metric_controller),
 ):
+    validate_create_metric(request)
     return controller.create_metric(request)
 
 

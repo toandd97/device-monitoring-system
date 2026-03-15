@@ -4,36 +4,52 @@ from typing import Dict, Any
 from src.common.logger import get_logger
 from src.kafka.consumer import KafkaEventConsumer
 from src.services.alert_service import get_alert_service
+from src.validators.metric_validator import ThresholdConfig
+from src.models.metric_model import MetricDocument, MetricFields, MetricStatus
 
 logger = get_logger(__name__)
+
+def _evaluate_status(value: float, thresholds: ThresholdConfig) -> str:
+    if value >= thresholds.critical:
+        return MetricStatus.CRITICAL
+    if value >= thresholds.warning:
+        return MetricStatus.WARNING
+    return MetricStatus.NORMAL
 
 def process_event(event: Dict[str, Any]) -> None:
     """Callback for processing Kafka events."""
     logger.debug("Received event: %s", event)
     
-    payload = event.get("payload", {})
+    if not event:
+        logger.warning("Received empty or None event")
+        return
+        
+    payload = event.get(MetricFields.PAYLOAD) or {}
     device_id = payload.get("device_id", "unknown")
     metric = payload.get("metric", "unknown")
     value = payload.get("value", 0)
+    timestamp = event.get(MetricFields.TIMESTAMP)
     
-    # Simple logic: If we receive the alert, we check if it's critical.
-    # Note: In a real microservice, the ingestion service might just dump to Kafka,
-    # and this consumer performs the actual "Analysis".
-    
-    # Requirement 4 & 6: Analyze against thresholds and trigger alerts.
-    # The MetricService already evaluates status and puts it in MongoDB, 
-    # but the Event format in AI_INSTRUCTIONS.md doesn't include "status" in payload.
-    # I'll re-evaluate it here or assume the ingestion service might include it in the future.
-    # For now, I'll re-evaluate based on a standard threshold or check if status is present.
-    
-    status = event.get("status") # If ingestion service included it
-    if not status:
-        # Re-evaluate or just alert if value is high (simple dummy logic for this test)
-        if value >= 80: # Critical threshold from description.md
-            status = "CRITICAL"
+    # Analyze against thresholds
+    thresholds = ThresholdConfig()
+    status = _evaluate_status(float(value), thresholds)
 
-    if status == "CRITICAL":
-        alert_msg = f"Device: {device_id}\nMetric: {metric}\nValue: {value}\nStatus: {status}"
+    # Store results in MongoDB
+    try:
+        document = MetricDocument.build_document(event, status)
+        MetricDocument.insert_one(document)
+        logger.info(f"Stored metric event {document.get(MetricFields.EVENT_ID)} for {device_id} with status {status}")
+    except Exception as e:
+        logger.error(f"Failed to store metric event in MongoDB: {e}")
+
+    # Trigger alerts when values are critical
+    if status == MetricStatus.CRITICAL:
+        alert_msg = (
+            f"<b>Device:</b> {device_id}\n"
+            f"<b>Metric:</b> {metric}\n"
+            f"<b>Value:</b> {value}\n"
+            f"<b>Status:</b> {status}"
+        )
         get_alert_service().send_alert(alert_msg)
 
 async def run_consumer_loop() -> None:

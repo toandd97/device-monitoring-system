@@ -16,11 +16,12 @@ def build_event(
     payload: Dict[str, Any],
     event_type: str = "metric.reported",
 ) -> Dict[str, Any]:
+    from src.models.metric_model import MetricFields
     return {
-        "event_id": generate_uuid(),
-        "event_type": event_type,
-        "timestamp": utc_now_iso(),
-        "source": source,
-        "payload": payload,
+        MetricFields.EVENT_ID: generate_uuid(),
+        MetricFields.EVENT_TYPE: event_type,
+        MetricFields.TIMESTAMP: utc_now_iso(),
+        MetricFields.SOURCE: source,
+        MetricFields.PAYLOAD: payload,
     }
 

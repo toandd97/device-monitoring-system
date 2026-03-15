@@ -1,8 +1,10 @@
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
 from src.common.logger import get_logger
+from src.middlewares.timing_middleware import TimingMiddleware
 from src.routes.api import router as main_api_router
 
 
@@ -14,14 +16,21 @@ def create_app() -> FastAPI:
 
     app.include_router(main_api_router)
 
+    app.add_middleware(TimingMiddleware)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     @app.on_event("startup")
-    async def _on_startup() -> None:  # noqa: D401
-        """Run startup tasks if any."""
+    async def _on_startup() -> None:
         logger.info("Starting API Service...")
 
     @app.on_event("shutdown")
     def _on_shutdown() -> None:
-        """Ngắt kết nối MongoDB khi tắt hệ thống."""
         from src.database.mongo_connection import MongoConnection
         MongoConnection.close()
         logger.info("Application shutdown: MongoDB connection closed.")
@@ -34,5 +43,5 @@ app = create_app()
 
 if __name__ == "__main__":
     logger.info("Starting API on port %s", settings.api_port)
-    uvicorn.run("src.main:app", host="0.0.0.0", port=settings.api_port, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=settings.api_port, reload=False)
 

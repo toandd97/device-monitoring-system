@@ -1,0 +1,53 @@
+@startuml
+title Device Monitoring System - Metric Processing Flow
+
+actor "Device\n(Router / Server)" as Device
+participant "API Service\n(Ingestion)" as API
+queue "Kafka Topic\n(device.metrics.raw)" as Kafka
+participant "Worker Service\n(Consumer)" as Consumer
+database "MongoDB\n(metrics)" as Mongo
+participant "Alert Service\n(Telegram)" as Alert
+
+== 1. Data Ingestion ==
+Device -> API: POST /api/v1/metrics\n(JSON: device_id, metric, value, timestamp)
+activate API
+
+API -> API: Extract payload & Validate input
+API -> API: generate_uuid() & utc_now_iso()
+API -> API: build_event() \n(Format as Nested JSON Event Object)
+API -> Kafka: Publish event
+activate Kafka
+Kafka --> API: Produce ACK
+deactivate Kafka
+
+API --> Device: HTTP 200 OK\n(Returns event_id & status)
+deactivate API
+
+== 2. Asynchronous Processing ==
+Kafka -> Consumer: Dispatch Event / Consume payload
+activate Consumer
+
+Consumer -> Consumer: Extract payload\n(Parse device_id, metric, value)
+Consumer -> Consumer: Evaluate thresholds\n(NORMAL, WARNING, CRITICAL)
+
+== 3. Data Persistence ==
+Consumer -> Consumer: MetricDocument.build_document()\n(Merge event with evaluated status)
+Consumer -> Mongo: MetricDocument.insert_one()
+activate Mongo
+Mongo -> Mongo: Inject created_time & updated_time
+Mongo --> Consumer: Return inserted_id
+deactivate Mongo
+
+== 4. Alert Triggering ==
+alt status == "CRITICAL"
+    Consumer -> Alert: get_alert_service().send_alert()
+    activate Alert
+    Alert -> Alert: Format Telegram message
+    Alert --> Consumer: Alert Dispatched
+    deactivate Alert
+else status == "NORMAL" or "WARNING"
+    Consumer -> Consumer: Skip Alert
+end
+
+deactivate Consumer
+@enduml

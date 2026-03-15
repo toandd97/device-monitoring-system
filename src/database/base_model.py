@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 
+from src.common.utils import utc_now_iso
 from src.database.mongo_connection import MongoConnection
 
 
@@ -12,6 +13,14 @@ class BaseModel:
 
     @classmethod
     def insert_one(cls, document: Dict[str, Any]) -> str:
+        if document is None:
+            document = {}
+            
+        if not document.get("created_time"):
+            document["created_time"] = utc_now_iso()
+        if not document.get("updated_time"):
+            document["updated_time"] = document["created_time"]
+            
         result = cls._collection().insert_one(document)
         return str(result.inserted_id)
 
@@ -38,6 +47,13 @@ class BaseModel:
         query: Dict[str, Any],
         update: Dict[str, Any],
     ) -> int:
+        if update is None:
+            update = {}
+            
+        target_set = update.get("$set") or {}
+        target_set["updated_time"] = utc_now_iso()
+        update["$set"] = target_set
+        
         result = cls._collection().update_one(query, update)
         return result.modified_count
 

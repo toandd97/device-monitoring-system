@@ -1,6 +1,4 @@
 #!/usr/bin/env sh
-# Init script chạy trước khi app start (PROD-style).
-# Có thể thêm bước init khác vào đây: Mongo indexes, Redis, v.v.
 
 set -e
 
@@ -8,12 +6,11 @@ KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}"
 KAFKA_TOPIC_METRICS="${KAFKA_TOPIC_METRICS:-device.metrics.raw}"
 KAFKA_TOPIC_PARTITIONS="${KAFKA_TOPIC_PARTITIONS:-8}"
 KAFKA_TOPIC_REPLICATION_FACTOR="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
-KAFKA_TOPICS_SCRIPT="${KAFKA_TOPICS_SCRIPT:-/opt/kafka/bin/kafka-topics.sh}"
+KAFKA_TOPICS_SCRIPT="${KAFKA_TOPICS_SCRIPT:-/usr/bin/kafka-topics}"
 
-# ---- Kafka: đợi broker sẵn sàng ----
 wait_for_kafka() {
   echo "[init] Waiting for Kafka at ${KAFKA_BOOTSTRAP_SERVERS}..."
-  max=30
+  max=60
   i=0
   while [ $i -lt $max ]; do
     if "$KAFKA_TOPICS_SCRIPT" --bootstrap-server "$KAFKA_BOOTSTRAP_SERVERS" --list 1>/dev/null 2>&1; then
@@ -38,17 +35,10 @@ create_kafka_topics() {
   echo "[init] Topic '${KAFKA_TOPIC_METRICS}' ready."
 }
 
-# ---- Có thể thêm init khác sau đây ----
-# Ví dụ: Mongo indexes, seed data, Redis warm-up, v.v.
-# run_mongo_indexes() { ... }
-# run_redis_init() { ... }
 
 # ---- Main ----
 wait_for_kafka
 create_kafka_topics
 
-# Thêm các bước init khác tại đây khi cần:
-# run_mongo_indexes
-# run_redis_init
 
 echo "[init] All init steps completed."

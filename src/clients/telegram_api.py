@@ -8,9 +8,9 @@ logger = get_logger(__name__)
 class TelegramAPI(BaseAPI):
     def __init__(self, token: str):
         base_url = f"https://api.telegram.org/bot{token}"
-        super().__init__(base_url)
+        super().__init__(base_url, timeout=15.0)
 
-    def send_message(self, chat_id: str, text: str, parse_mode: str = "Markdown") -> Dict[str, Any]:
+    def send_message(self, chat_id: str, text: str, parse_mode: str = "HTML") -> Dict[str, Any]:
         payload = {
             "chat_id": chat_id,
             "text": text,

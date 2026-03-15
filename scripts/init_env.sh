@@ -29,7 +29,6 @@ ensure_var "SCHEDULER_INTERVAL_SECONDS" "5"
 ensure_var "CONSUMER_ENABLED" "true"
 
 # --- Alarm configurations ---
-# You can override these in the .env file with your real Chat ID and Bot Token
 ensure_var "ALERT_TELEGRAM_TOKEN" ""
 ensure_var "ALERT_TELEGRAM_CHAT_ID" ""
 ensure_var "DISCORD_WEBHOOK_URL" ""
