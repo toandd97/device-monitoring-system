@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     mongo_uri: AnyUrl = Field("mongodb://mongo:27017", alias="MONGO_URI")
     mongo_db_name: str = Field("device_monitoring", alias="MONGO_DB_NAME")
 
+    # Consumer / alerting
+    consumer_enabled: bool = Field(True, alias="CONSUMER_ENABLED")
+    alert_telegram_token: str | None = Field(None, alias="ALERT_TELEGRAM_TOKEN")
+    alert_telegram_chat_id: str | None = Field(None, alias="ALERT_TELEGRAM_CHAT_ID")
+
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -21,8 +21,16 @@ class FakeMetricDocument:
         cls.inserted.append(document)
         return document.get("_id", "fake-id")
 
+    @staticmethod
+    def build_document(**kwargs):
+        kwargs.setdefault("_id", "fake-id")
+        return kwargs
+
 
 def test_evaluate_status_levels(monkeypatch):
+    fake_producer = FakeProducer()
+    monkeypatch.setattr("src.services.metric_service.KafkaEventProducer", lambda: fake_producer)
+    
     svc = MetricService(ThresholdConfig(normal=60, warning=70, critical=80))
 
     assert svc._evaluate_status(50) == "NORMAL"  # noqa: SLF001

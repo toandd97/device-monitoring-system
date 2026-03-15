@@ -8,7 +8,7 @@ REPLICATION_FACTOR="${KAFKA_TOPIC_REPLICATION_FACTOR:-1}"
 
 echo "Creating Kafka topic '${TOPIC_NAME}' on broker '${KAFKA_BROKER}'..."
 
-kafka-topics.sh \
+kafka-topics \
   --create \
   --if-not-exists \
   --bootstrap-server "${KAFKA_BROKER}" \

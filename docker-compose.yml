@@ -1,47 +1,136 @@
-version: "3.9"
-
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    networks:
+      - kafka-net
+    ports:
+      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
+    restart: unless-stopped
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
-    depends_on:
-      - zookeeper
+    container_name: kafka
+    networks:
+      - kafka-net
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    restart: unless-stopped
 
   mongo:
     image: mongo:7.0
+    container_name: mongo
+    networks:
+      - kafka-net
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
-  app:
+  init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: init
+    networks:
+      - kafka-net
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_METRICS: device.metrics.raw
+      KAFKA_TOPIC_PARTITIONS: "8"
+      KAFKA_TOPIC_REPLICATION_FACTOR: "1"
+    volumes:
+      - ./scripts:/scripts:ro
+    command: ["sh", "/scripts/init.sh"]
+    restart: "no"
+
+  api_service:
+    container_name: api_service
     build:
       context: .
       dockerfile: Dockerfile
+    networks:
+      - kafka-net
     depends_on:
-      - kafka
-      - mongo
-    env_file:
-      - .env
+      init:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
-    command: >
-      sh -c "
-        scripts/init_env.sh &&
-        scripts/create_topics.sh &&
-        uvicorn src.main:app --host 0.0.0.0 --port 8000
-      "
+    env_file:
+      - .env
+    environment:
+      # Hard override to prevent this container from being a worker/simulator
+      CONSUMER_ENABLED: "false"
+      SCHEDULER_ENABLED: "false"
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
 
+  worker_service:
+    container_name: worker_service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - kafka-net
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+      api_service:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      # Hard override to ensure it only acts as worker
+      CONSUMER_ENABLED: "true"
+      SCHEDULER_ENABLED: "false"
+    command: python src/worker.py
+
+  simulator_service:
+    container_name: simulator_service
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - kafka-net
+    depends_on:
+      api_service:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      API_BASE_URL: "http://api_service:8000"
+      # Hard override to ensure simulator acts as sender
+      SCHEDULER_ENABLED: "true"
+      CONSUMER_ENABLED: "false"
+    command: python src/simulator.py
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - kafka-net
+networks:
+  kafka-net:
+    driver: bridge
